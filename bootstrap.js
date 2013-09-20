@@ -2,30 +2,62 @@ const { classes: Cc, interfaces: Ci, utils: Cu } = Components;
 
 Cu.import("resource://gre/modules/Home.jsm");
 Cu.import("resource://gre/modules/Services.jsm");
-Cu.import("resource://gre/modules/JNI.jsm");
-//Services.scriptloader.loadSubScript("chrome://browser/content/AccountsHelper.js", this);
 
-// Keep track of the message ids so that we can remove them.
-var messageIds = [];
+// URL where we look for snippets data.
+var SNIPPETS_URL = "https://people.mozilla.org/~mleibovic/snippets.json";
+
+// Keep track of the message ids so that we can remove them on uninstall.
+var gMessageIds = [];
+
+/**
+ * Adds snippets to the home banner message rotation.
+ *
+ * @param response JSON array of message data JSON objects.
+ *        Each object should have the following properties:
+ *          - text (string): Text to show as banner message.
+ *          - url (string): URL to open when banner is clicked.
+ *          - icon (data URI): Icon to appear in banner.
+ */
+function addSnippets(response, window) {
+  let messages = JSON.parse(response);
+
+  messages.forEach(function(message) {
+    let id = Home.banner.add({
+      text: message.text,
+      icon: message.icon,
+      onclick: function() {
+        window.BrowserApp.addTab(message.url);
+      }
+    });
+    gMessageIds.push(id);
+  });
+}
 
 function loadIntoWindow(window) {
-  let syncAccountsExist = false; // AccountsHelper.syncAccountsExist()
-  if (syncAccountsExist)
+  let xhr = Cc["@mozilla.org/xmlextras/xmlhttprequest;1"].createInstance(Ci.nsIXMLHttpRequest);
+  try {
+    xhr.open("GET", SNIPPETS_URL, true);
+  } catch (e) {
+    Cu.reportError("Exception initalizing request to " + SNIPPETS_URL + ": " + e);
     return;
+  }
 
-  let id = Home.banner.add({
-    text: "Set up Firefox Sync to access bookmarks, history and tabs from your other devices",
-    icon: "chrome://homedemo/skin/sync.png",
-    onclick: function() {
-      window.NativeWindow.toast.show("We should open the sync settings page now", "short");
+  xhr.onerror = function onerror(event) {
+    Cu.reportError("Error handing request to " + SNIPPETS_URL);
+  }
+  xhr.onload = function onload(event) {
+    if (xhr.status !== 200) {
+      Cu.reportError("Request to " + SNIPPETS_URL + " returned status " + xhr.status);
+      return;
     }
-  });
+    addSnippets(xhr.responseText, window);
+  }
 
-  messageIds.push(id);
+  xhr.send(null);
 }
 
 function unloadFromWindow(window) {
-  messageIds.forEach(function(id) {
+  gMessageIds.forEach(function(id) {
     Home.banner.remove(id);
   });
 }
