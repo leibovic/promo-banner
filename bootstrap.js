@@ -4,6 +4,7 @@ Cu.import("resource://gre/modules/Home.jsm");
 Cu.import("resource://gre/modules/Services.jsm");
 
 // URL where we look for snippets data.
+// See https://github.com/leibovic/snippets-server
 var SNIPPETS_URL = "http://snippets-server.paas.allizom.org/";
 
 // Keep track of the message ids so that we can remove them on uninstall.
