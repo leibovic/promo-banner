@@ -43,6 +43,8 @@ function LOG(text) {
  * Loads snippets from snippets server and caches the response.
  */
 function updateSnippets() {
+  LOG("updateSnippets");
+
   let xhr = Cc["@mozilla.org/xmlextras/xmlhttprequest;1"].createInstance(Ci.nsIXMLHttpRequest);
   try {
     xhr.open("GET", gSnippetsURL, true);
@@ -68,6 +70,8 @@ function updateSnippets() {
  * Caches snippets server response text to snippets.json file in profile directory.
  */
 function cacheResponse(response) {
+  LOG("cacheResponse");
+
   let path = OS.Path.join(OS.Constants.Path.profileDir, "snippets.json");
   let data = gEncoder.encode(response);
   let promise = OS.File.writeAtomic(path, data, { tmpPath: path + ".tmp"});
@@ -83,6 +87,8 @@ function cacheResponse(response) {
  * Loads snippets from cached snippets.json file.
  */
 function loadSnippetsFromCache() {
+  LOG("loadSnippetsFromCache");
+
   let path = OS.Path.join(OS.Constants.Path.profileDir, "snippets.json");
   let promise = OS.File.read(path);
   promise.then(
@@ -107,7 +113,6 @@ function loadSnippetsFromCache() {
  */
 function addSnippets(response) {
   let messages = JSON.parse(response);
-
   messages.forEach(function(message) {
     let id = Home.banner.add({
       text: message.text,
@@ -126,21 +131,20 @@ function addSnippets(response) {
 function loadIntoWindow(window) {
   gChromeWin = window;
 
+  // Once every 24 hours, request snippets from the snippets service.
   try {
-    // Once every 24 hours, request snippets from the snippets service
-    let lastUpdate = Services.prefs.getIntPref("snippets.lastUpdate");
-    if (Date.now() - lastUpdate > SNIPPETS_UPDATE_INTERVAL_MS) {
-      updateSnippets();
-
-      // Even if fetching should fail we don't want to spam the server, thus
-      // set the last update time regardless its results. Will retry tomorrow.
-      Services.prefs.setIntPref("snippets.lastUpdate", Date.now());
+    let lastUpdate = parseFloat(Services.prefs.getCharPref("snippets.lastUpdate"));
+    if (Date.now() - lastUpdate < SNIPPETS_UPDATE_INTERVAL_MS) {
+      loadSnippetsFromCache();
       return;
     }
   } catch (e) {}
 
-  // Default to loading snippets from the cache.
-  loadSnippetsFromCache();
+  updateSnippets();
+
+  // Even if fetching should fail we don't want to spam the server, thus
+  // set the last update time regardless its results. Will retry tomorrow.
+  Services.prefs.setCharPref("snippets.lastUpdate", Date.now());
 }
 
 function unloadFromWindow(window) {
